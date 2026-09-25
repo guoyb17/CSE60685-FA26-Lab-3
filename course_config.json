@@ -1,0 +1,21 @@
+{
+  "schema_version": 3,
+  "dataset": "Fashion-MNIST",
+  "train_size": 12000,
+  "validation_size": 2000,
+  "test_size": 10000,
+  "epochs": 3,
+  "batch_size": 64,
+  "evaluation_batch_size": 256,
+  "optimizer": "Adam",
+  "learning_rate": 0.0001,
+  "seed": 42,
+  "threads": 1,
+  "interop_threads": 1,
+  "num_workers": 0,
+  "warmup": 10,
+  "runs": 100,
+  "input_shape": [1, 1, 28, 28],
+  "dtype": "float32",
+  "preprocessing": "28x28 grayscale uint8 divided by 255; no resize or additional normalization"
+}
