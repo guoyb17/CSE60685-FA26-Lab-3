@@ -8,10 +8,9 @@ from time import perf_counter
 import torch
 
 from common import (ROOT, course_config, device_snapshot, environment, evaluate_loader,
-                    load_checkpoint, new_directory, run_cli, save_checkpoint, setup_cpu,
-                    sha256, verify_reload,
-                    weight_statistics, write_json)
-from data import check_checkpoint_data, loader, training_sets
+                    load_checkpoint, new_directory, parameter_count, run_cli,
+                    save_checkpoint, setup_cpu, write_json)
+from data import loader, training_sets
 
 
 def train_epoch(model, batches, optimizer):
@@ -44,10 +43,8 @@ def main():
     args = parser.parse_args()
     cfg = course_config()
     setup_cpu(seed=cfg['seed'])
-    model, checkpoint, path = load_checkpoint(args.checkpoint, stage='pruned')
-    check_checkpoint_data(checkpoint)
+    model, checkpoint, _ = load_checkpoint(args.checkpoint, stage='pruned')
     dataset, training, validation = training_sets(args.data_dir)
-    initial, _ = verify_reload(model, checkpoint, dataset, validation)
     output = new_directory(args.output)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg['learning_rate'])
     batches = loader(training, training=True)
@@ -60,10 +57,9 @@ def main():
         history.append(row)
         print(f'{checkpoint["model_name"]} epoch {epoch}/{cfg["epochs"]}: loss {row["train_loss"]:.4f}; '
               f'validation {metrics["accuracy_pct"]:.2f}%; train {row["train_epoch_s"]:.2f} s', flush=True)
-    metadata = {key: checkpoint[key] for key in ('model_name', 'origin', 'pruning',
-                'split_sha256', 'data_manifest_sha256', 'before_validation')}
-    metadata.update(stage='deployment', training_history=history,
-                    parent_checkpoint_sha256=sha256(path))
+    metadata = {key: checkpoint[key] for key in
+                ('model_name', 'origin', 'pruning', 'before_validation')}
+    metadata.update(stage='deployment', training_history=history)
     save_checkpoint(output / 'checkpoint.pt', model, metadata, dataset, metrics)
     with (output / 'training.csv').open('x', newline='', encoding='utf-8') as stream:
         writer = csv.DictWriter(stream, fieldnames=list(history[0]))
@@ -72,11 +68,10 @@ def main():
     write_json(output / 'config.json', {'architecture': model.config, 'course_config': cfg,
                'origin': metadata['origin'], 'pruning': metadata['pruning']})
     write_json(output / 'training_summary.json', {'model_name': checkpoint['model_name'],
-               'checkpoint_sha256': sha256(output / 'checkpoint.pt'),
-               'validation_before_ft_pct': initial['accuracy_pct'],
+               'validation_before_ft_pct': checkpoint['before_validation']['accuracy_pct'],
                'validation_after_ft_pct': metrics['accuracy_pct'],
                'mean_train_epoch_s': mean(row['train_epoch_s'] for row in history),
-               'weights': weight_statistics(model), 'environment': environment(),
+               'parameter_count': parameter_count(model), 'environment': environment(),
                'telemetry': {'before': before_telemetry, 'after': device_snapshot()}})
     print('Saved last-epoch deployment checkpoint.')
 

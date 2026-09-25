@@ -21,6 +21,7 @@ python prepare_data.py
 
 Use a separate environment.
 In a new terminal, return to this folder and run `source env/bin/activate`.
+Use the 64-bit Raspberry Pi OS and Python 3.13 setup from Lab 2.
 
 ## Import A of Lab 2
 
@@ -30,7 +31,7 @@ python import_baseline.py --checkpoint ../CSE60685-FA26-Lab-2/results/baseline/c
 
 Change the input path if necessary.
 Use A's last checkpoint from the required five-epoch run, with channels 6/16 and hidden widths 120/84.
-The import verifies architecture, settings, data split, saved logits and validation accuracy.
+The import checks the baseline architecture, five-epoch training settings, saved logits and validation accuracy.
 
 If your checkpoint is unavailable or fails verification, check it first.
 You may use `--checkpoint assets/fallback_baseline.pt` instead;
@@ -102,6 +103,8 @@ done
 python summarize.py --results results --output results/comparison
 ```
 
+The benchmark loop does not pause for cooling. Run its commands individually if the Pi needs time to cool between models.
+
 Each model uses the same preloaded validation image, shape [1,1,28,28], float32.
 The benchmark uses evaluation and inference modes.
 Timing includes the synchronous CPU model call and Python overhead;
@@ -109,7 +112,8 @@ loading, preprocessing, argmax/softmax, printing and saving are excluded.
 
 Each raw timing CSV has exactly 100 measurement rows plus a header, excluding the 10 warm-ups.
 Report the median in milliseconds.
-The summary verifies checkpoint pairing, source, settings, test count and raw timing statistics, then writes `comparison.csv`, `comparison.json` and `report_table.md` for the three required models.
+The summary reads the training, evaluation and timing results, then writes `comparison.csv`, `comparison.json` and `report_table.md` for the three required models.
+Keep each run's checkpoints and results together; the summary does not check whether files came from the same run.
 
 ## Troubleshooting and file guide
 
@@ -117,18 +121,19 @@ The summary verifies checkpoint pairing, source, settings, test count and raw ti
 - `pruning_ops.py`: complete L1 channel selection and weight-copy functions.
 - `pruning.py`: model construction and consistency checks.
 - `common.py`, `data.py`: shared CPU, checkpoint and dataset helpers following Lab 2.
-- `assets/split.json`, `assets/data_manifest.json`: unchanged Lab 2 data assets.
+- `assets/split.json`: the same training and validation indices as Lab 2.
+- `assets/data_manifest.json`: the Fashion-MNIST download URLs and filenames.
 - `assets/fallback_baseline.pt`: supplied five-epoch Lab 2 A, available when a personal baseline cannot be used.
 
-A source error usually means the wrong Lab 2 model, checkpoint path, training recipe or split.
+A source error usually means the wrong Lab 2 model, checkpoint path or training recipe.
 If the pruning check fails in a fresh copy, preserve its output and contact the TA.
 
 Programs refuse existing output directories.
 For a complete repeat, use a new root such as `results_repeat1` consistently in all paths and pass it as `--results` to the summary.
 Do not mix results from different runs.
 
-Data preparation checks existing files.
-If a checksum fails, preserve them for diagnosis and prepare a new directory.
+Data preparation downloads missing files and reuses existing files.
+If data cannot be loaded, prepare a new directory with `python prepare_data.py --data-dir data_fresh`.
 Pass the same `--data-dir` to every later command.
 
 A separate reload-only diagnostic is available:

@@ -2,10 +2,10 @@
 import argparse
 from pathlib import Path
 
-from common import (ROOT, checkpoint_provenance, environment, evaluate_loader,
+from common import (ROOT, environment, evaluate_loader,
                     load_checkpoint, new_directory, run_cli, setup_cpu,
                     verify_reload, write_json)
-from data import check_checkpoint_data, loader, test_set, training_sets
+from data import loader, test_set, training_sets
 
 
 def main():
@@ -18,11 +18,10 @@ def main():
     args = parser.parse_args()
     setup_cpu()
     model, checkpoint, path = load_checkpoint(args.checkpoint, stage='deployment')
-    check_checkpoint_data(checkpoint)
     dataset, _, validation = training_sets(args.data_dir)
     metrics, error = verify_reload(model, checkpoint, dataset, validation)
     output = new_directory(args.output)
-    result = {**checkpoint_provenance(checkpoint, path), 'schema_version': 3,
+    result = {'model_name': checkpoint['model_name'], 'checkpoint': str(path),
               'reload_verified': True, 'reload_max_abs_error': error,
               'validation_accuracy_pct': metrics['accuracy_pct'],
               'environment': environment()}

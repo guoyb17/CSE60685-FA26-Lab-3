@@ -4,6 +4,8 @@ __pycache__/
 *.py[cod]
 data/
 results/
+results_*/
+data_*/
 inputs/
 .ipynb_checkpoints/
 .DS_Store

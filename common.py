@@ -1,6 +1,5 @@
-"""CPU setup, checkpoint validation and result helpers, following Lab 2."""
+"""CPU setup, model loading and result helpers for Lab 3."""
 from datetime import datetime, timezone
-import hashlib
 import json
 import math
 from pathlib import Path
@@ -26,14 +25,6 @@ def write_json(path, value):
     with Path(path).open('x', encoding='utf-8', newline='\n') as stream:
         json.dump(value, stream, indent=2, allow_nan=False)
         stream.write('\n')
-
-
-def sha256(path):
-    digest = hashlib.sha256()
-    with Path(path).open('rb') as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def course_config():
@@ -158,9 +149,9 @@ def verify_reload(model, checkpoint, dataset, validation):
 
 
 def save_checkpoint(path, model, metadata, dataset, validation_metrics):
-    checkpoint = dict(metadata, schema_version=3, architecture=model.config,
+    checkpoint = dict(metadata, architecture=model.config,
                       state_dict={key: value.detach().cpu().clone() for key, value in model.state_dict().items()},
-                      parameter_count=parameter_count(model), weight_statistics=weight_statistics(model),
+                      parameter_count=parameter_count(model),
                       verification=verification_record(model, dataset, validation_metrics),
                       course_config=course_config(), environment=environment())
     with Path(path).open('xb') as stream:
@@ -171,46 +162,14 @@ def save_checkpoint(path, model, metadata, dataset, validation_metrics):
 def load_checkpoint(path, stage=None):
     from models import LeNet, validate_config
     path = Path(path).expanduser().resolve()
-    try:
-        checkpoint = torch.load(path, map_location='cpu', weights_only=True)
-    except Exception as exc:
-        raise ValueError(f'Cannot read checkpoint {path.name}: {exc}') from exc
-    required = {'schema_version', 'model_name', 'stage', 'architecture', 'state_dict',
-                'course_config', 'split_sha256', 'data_manifest_sha256', 'parameter_count',
-                'verification', 'origin', 'pruning', 'training_history', 'weight_statistics'}
-    if not isinstance(checkpoint, dict) or not required.issubset(checkpoint):
-        raise ValueError('Missing Lab 3 checkpoint metadata. Import a Lab 2 file first.')
-    if checkpoint['schema_version'] != 3 or checkpoint['stage'] not in ('source', 'pruned', 'deployment'):
-        raise ValueError('Unsupported Lab 3 checkpoint version or stage.')
+    checkpoint = torch.load(path, map_location='cpu', weights_only=True)
     if stage is not None and checkpoint['stage'] != stage:
         raise ValueError(f'This command needs a {stage} checkpoint, not {checkpoint["stage"]}.')
-    if checkpoint['course_config'] != course_config():
-        raise ValueError('Checkpoint settings differ from this Lab 3 project.')
     config = validate_config(checkpoint['architecture'], checkpoint['model_name'])
     model = LeNet(config).cpu()
-    try:
-        model.load_state_dict(checkpoint['state_dict'], strict=True)
-    except RuntimeError as exc:
-        raise ValueError(f'Checkpoint weights do not match its architecture/stage: {exc}') from exc
-    if not all(torch.isfinite(value).all().item() for value in model.state_dict().values()):
-        raise ValueError('Checkpoint contains non-finite weights.')
-    if parameter_count(model) != checkpoint['parameter_count']:
-        raise ValueError('Checkpoint parameter count does not match its architecture.')
+    model.load_state_dict(checkpoint['state_dict'])
     model.eval()
-    with torch.inference_mode():
-        if tuple(model(torch.zeros(1, 1, 28, 28)).shape) != (1, 10):
-            raise ValueError('Model must return ten logits.')
-    if weight_statistics(model) != checkpoint['weight_statistics']:
-        raise ValueError('Checkpoint weight statistics do not match its tensors.')
-    if checkpoint['stage'] == 'deployment' and len(checkpoint['training_history']) != course_config()['epochs']:
-        raise ValueError('Deployment checkpoint lacks the complete fine-tuning history.')
     return model, checkpoint, path
-
-
-def checkpoint_provenance(checkpoint, path):
-    return {key: checkpoint[key] for key in ('model_name', 'stage', 'architecture',
-            'parameter_count', 'split_sha256', 'data_manifest_sha256', 'course_config',
-            'origin', 'pruning')} | {'checkpoint_sha256': sha256(path)}
 
 
 def run_cli(main):
